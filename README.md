@@ -1,10 +1,10 @@
-# GitLab DevSecOps Pipeline with GitOps Deployment on AWS EKS
+# GitLab DevSecOps Pipeline with GitOps & Blue-Green Deployment on AWS EKS
 
-A complete end-to-end DevSecOps implementation using GitLab CI/CD integrated with security scanning tools, Kubernetes, Argo CD, and AWS EKS.
+A complete end-to-end DevSecOps implementation using GitLab CI/CD integrated with security scanning tools, Kubernetes, Argo CD, Argo Rollouts, and AWS EKS.
 
 ---
 
-## Project Overview
+# Project Overview
 
 This project demonstrates a practical DevSecOps workflow where application code, infrastructure, and Kubernetes deployment manifests are continuously validated for security and compliance before deployment.
 
@@ -19,12 +19,14 @@ The solution incorporates:
 * Trivy
 * Checkov
 * Argo CD
+* Argo Rollouts
 * Terraform
 * GitOps Deployment Model
+* Blue-Green Deployment Strategy
 
 ---
 
-## Architecture
+# Architecture
 
 ```text
 Developer Commit
@@ -49,29 +51,36 @@ Secrets   SAST      IaC Scan
       Argo CD
         │
         ▼
+   Argo Rollouts
+        │
+        ▼
+ Blue-Green Deployment
+        │
+        ▼
       AWS EKS
 ```
 
 ---
 
-## Tools Used
+# Tools Used
 
-| Tool         | Purpose                                    |
-| ------------ | ------------------------------------------ |
-| GitLab CI/CD | Continuous Integration & Delivery          |
-| Docker       | Containerization                           |
-| Kubernetes   | Container Orchestration                    |
-| AWS EKS      | Managed Kubernetes Service                 |
-| SonarQube    | Static Application Security Testing (SAST) |
-| Gitleaks     | Secret Detection                           |
-| Checkov      | Infrastructure as Code Security Scanning   |
-| Trivy        | Container Vulnerability Scanning           |
-| Argo CD      | GitOps Continuous Delivery                 |
-| Terraform    | Infrastructure Provisioning                |
+| Tool          | Purpose                                       |
+| ------------- | --------------------------------------------- |
+| GitLab CI/CD  | Continuous Integration & Delivery             |
+| Docker        | Containerization                              |
+| Kubernetes    | Container Orchestration                       |
+| AWS EKS       | Managed Kubernetes Service                    |
+| SonarQube     | Static Application Security Testing (SAST)    |
+| Gitleaks      | Secret Detection                              |
+| Checkov       | Infrastructure as Code Security Scanning      |
+| Trivy         | Container Vulnerability Scanning              |
+| Argo CD       | GitOps Continuous Delivery                    |
+| Argo Rollouts | Progressive Delivery & Blue-Green Deployments |
+| Terraform     | Infrastructure Provisioning                   |
 
 ---
 
-## Repository Structure
+# Repository Structure
 
 ```text
 .
@@ -84,7 +93,10 @@ Secrets   SAST      IaC Scan
 │
 ├── k8s-manifests
 │   ├── deployment.yaml
+│   ├── rollout.yaml
 │   ├── service.yaml
+│   ├── service-active.yaml
+│   ├── service-preview.yaml
 │   └── ingress.yaml
 │
 ├── secrets.env
@@ -94,9 +106,9 @@ Secrets   SAST      IaC Scan
 
 ---
 
-## DevSecOps Pipeline Stages
+# DevSecOps Pipeline Stages
 
-### 1. Secret Scanning
+## 1. Secret Scanning
 
 Gitleaks scans the repository for:
 
@@ -115,7 +127,7 @@ git_leaks:
 
 ---
 
-### 2. Static Application Security Testing (SAST)
+## 2. Static Application Security Testing (SAST)
 
 SonarQube performs:
 
@@ -133,7 +145,7 @@ sonarqube_scan:
 
 ---
 
-### 3. Infrastructure as Code Security
+## 3. Infrastructure as Code Security
 
 Checkov scans Terraform and Kubernetes manifests for:
 
@@ -151,7 +163,7 @@ checkov_scan:
 
 ---
 
-### 4. Container Security Scanning
+## 4. Container Security Scanning
 
 Trivy scans:
 
@@ -169,7 +181,7 @@ trivy-scan:
 
 ---
 
-### 5. Docker Image Build
+## 5. Docker Image Build
 
 Application images are built using Docker.
 
@@ -182,13 +194,13 @@ docker-build:
 
 ---
 
-## GitOps Deployment with Argo CD
+# GitOps Deployment with Argo CD
 
 This project demonstrates GitOps-based deployment using Argo CD.
 
 Argo CD continuously monitors Kubernetes manifests stored in Git and automatically synchronizes the desired state to the Kubernetes cluster.
 
-Workflow:
+## Workflow
 
 ```text
 Developer Updates Kubernetes Manifest
@@ -209,7 +221,7 @@ Developer Updates Kubernetes Manifest
          AWS EKS Deployment
 ```
 
-### Key GitOps Features
+## Key GitOps Features
 
 * Declarative Deployments
 * Automatic Synchronization
@@ -217,7 +229,7 @@ Developer Updates Kubernetes Manifest
 * Drift Detection
 * Git as Single Source of Truth
 
-Example Argo CD Application:
+## Example Argo CD Application
 
 ```yaml
 apiVersion: argoproj.io/v1alpha1
@@ -246,13 +258,74 @@ spec:
 
 ---
 
-## Kubernetes Deployment
+# Progressive Delivery using Argo Rollouts
+
+This project implements Blue-Green deployment using Argo Rollouts integrated with Argo CD on Amazon EKS.
+
+## Deployment Workflow
+
+```text
+Developer Updates Image Version
+              │
+              ▼
+      GitLab Repository
+              │
+              ▼
+         Argo CD Sync
+              │
+              ▼
+ Argo Rollouts Creates
+   Preview Environment
+              │
+              ▼
+      Validation Testing
+              │
+              ▼
+      Manual Promotion
+              │
+              ▼
+      Traffic Switch
+              │
+              ▼
+      Production Release
+```
+
+## Blue-Green Deployment Features
+
+* Zero Downtime Deployments
+* Preview Environment Validation
+* Manual Promotion Approval
+* Instant Rollback Capability
+* Traffic Switching
+* Kubernetes Native Progressive Delivery
+
+## Example Rollout Configuration
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+
+metadata:
+  name: nginx-demo
+
+spec:
+  strategy:
+    blueGreen:
+      activeService: nginx-active
+      previewService: nginx-preview
+      autoPromotionEnabled: false
+```
+
+---
+
+# Kubernetes Deployment
 
 The application is deployed to Amazon EKS using Kubernetes manifests.
 
 Deployment Components:
 
 * Deployment
+* Rollout
 * Service
 * Ingress
 * Namespace
@@ -267,7 +340,7 @@ Benefits:
 
 ---
 
-## Security Controls Implemented
+# Security Controls Implemented
 
 | Security Area               | Implementation |
 | --------------------------- | -------------- |
@@ -276,12 +349,13 @@ Benefits:
 | IaC Security                | Checkov        |
 | Container Security          | Trivy          |
 | GitOps Deployment           | Argo CD        |
+| Progressive Delivery        | Argo Rollouts  |
 | Kubernetes Deployment       | Amazon EKS     |
 | Infrastructure Provisioning | Terraform      |
 
 ---
 
-## AWS EKS Integration
+# AWS EKS Integration
 
 This project integrates with Amazon EKS for Kubernetes deployment.
 
@@ -295,11 +369,13 @@ Features:
 
 ---
 
-## Key Features
+# Key Features
 
 * End-to-End DevSecOps Pipeline
 * Shift-Left Security
 * GitOps Deployment Model
+* Blue-Green Deployment Strategy
+* Progressive Delivery
 * Infrastructure as Code
 * Kubernetes Security Best Practices
 * CI/CD Automation
@@ -308,15 +384,15 @@ Features:
 
 ---
 
-## Setup Instructions
+# Setup Instructions
 
-### Clone Repository
+## Clone Repository
 
 ```bash
 git clone https://github.com/<your-github-username>/<repository-name>.git
 ```
 
-### Run Terraform
+## Run Terraform
 
 ```bash
 terraform init
@@ -324,19 +400,19 @@ terraform plan
 terraform apply
 ```
 
-### Verify Kubernetes Cluster
+## Verify Kubernetes Cluster
 
 ```bash
 kubectl get nodes
 ```
 
-### Configure Argo CD
+## Configure Argo CD
 
 ```bash
 kubectl apply -f application.yaml
 ```
 
-### Verify Application
+## Verify Application
 
 ```bash
 kubectl get applications -n argocd
@@ -345,30 +421,66 @@ kubectl get pods
 
 ---
 
-## Sample Security Findings
+# Blue-Green Deployment Demonstration
 
-### Gitleaks
+Successfully implemented and validated Blue-Green deployment using Argo Rollouts and Argo CD.
+
+## Commands Used
+
+```bash
+kubectl argo rollouts get rollout nginx-demo -n default
+
+kubectl argo rollouts promote nginx-demo -n default
+
+kubectl argo rollouts undo nginx-demo -n default
+
+kubectl argo rollouts dashboard
+```
+
+## Deployment Lifecycle
+
+```text
+Version 1 (Blue)
+       │
+       ▼
+Version 2 (Green Preview)
+       │
+       ▼
+Manual Promotion
+       │
+       ▼
+Traffic Switch
+       │
+       ▼
+Version 2 Production
+```
+
+---
+
+# Sample Security Findings
+
+## Gitleaks
 
 * Hardcoded Secrets
 * API Tokens
 * AWS Credentials
 * Password Exposure
 
-### SonarQube
+## SonarQube
 
 * Code Smells
 * Security Hotspots
 * Maintainability Issues
 * Vulnerability Detection
 
-### Checkov
+## Checkov
 
 * Terraform Misconfigurations
 * Security Group Violations
 * IAM Policy Issues
 * Kubernetes Security Checks
 
-### Trivy
+## Trivy
 
 * Container Vulnerabilities
 * Dependency Risks
@@ -377,7 +489,7 @@ kubectl get pods
 
 ---
 
-## Learning Outcomes
+# Learning Outcomes
 
 This project demonstrates practical experience with:
 
@@ -387,6 +499,9 @@ This project demonstrates practical experience with:
 * AWS EKS
 * GitOps
 * Argo CD
+* Argo Rollouts
+* Blue-Green Deployments
+* Progressive Delivery
 * Terraform
 * Container Security
 * Infrastructure Security
@@ -394,21 +509,25 @@ This project demonstrates practical experience with:
 * Cloud Native Tooling
 
 ---
-**Future Enhancements**
-- ECR Image Push
-- Automated Image Tag Updates
-- Argo Rollouts (Blue-Green Deployment)
-- Helm-Based Deployments
-- Multi-Environment GitOps
-- Flux CD Integration
-- Prometheus & Grafana Monitoring
-- Kyverno Policies
+
+# Future Enhancements
+
+* ECR Image Push
+* Automated Image Tag Updates
+* Helm-Based Deployments
+* Multi-Environment GitOps
+* Flux CD Integration
+* Prometheus & Grafana Monitoring
+* Kyverno Policies
+
 ---
-## Author
+
+# Author
 
 **Shrini**
 
 DevOps / DevSecOps Engineer
 
 GitHub: https://github.com/shrini-devsecops
+
 LinkedIn: https://linkedin.com/in/shrinivasa-a-l-devops

@@ -1,0 +1,66 @@
+stages:
+  - build
+  - security
+
+variables:
+  IMAGE_NAME: devsecops-demo
+
+git_leaks:
+  stage: security
+  image:
+    name: zricethezav/gitleaks:latest
+    entrypoint: [""]           # required for GitLab + gitleaks image
+  variables:
+    GIT_DEPTH: 0
+  tags:
+    - shared	
+  script:
+    - gitleaks version
+    - gitleaks detect --source . --redact --no-banner \
+        --report-format json --report-path gitleaks-report.json --exit-code 1
+  after_script:
+    - test -f gitleaks-report.json || echo '{}' > gitleaks-report.json
+  artifacts:
+    when: always
+    paths:
+      - gitleaks-report.json
+
+sonarqube_scan:
+  stage: security
+  image: sonarsource/sonar-scanner-cli:latest
+  script:
+    - 'echo "Target SonarQube: ${SONAR_HOST_URL:-<unset>}"'
+    - '[ -n "$SONAR_HOST_URL" ] || { echo "SONAR_HOST_URL CI/CD variable is not set"; exit 1; }'
+    - '[ -n "$SONAR_TOKEN_DEV" ] || { echo "SONAR_TOKEN_DEV CI/CD variable is not set"; exit 1; }'
+    - sonar-scanner -Dsonar.projectKey=$CI_PROJECT_NAME -Dsonar.sources=. -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.login=$SONAR_TOKEN_DEV -Dsonar.branch.name=$CI_COMMIT_BRANCH
+  tags:
+    - shared
+
+
+docker-build:
+  stage: build
+  image: docker:latest
+  tags:
+    - shared
+  script:
+    - docker build -t $IMAGE_NAME .
+
+trivy-scan:
+  stage: security
+  image:
+    name: aquasec/trivy
+    entrypoint: [""]
+  tags:
+    - shared
+  script:
+    - trivy image --severity HIGH,CRITICAL $IMAGE_NAME
+
+checkov_scan:
+  stage: security
+  image:
+    name: bridgecrew/checkov
+    entrypoint: [""]
+  tags:
+    - shared  
+  script:
+    - checkov -d .

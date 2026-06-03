@@ -394,7 +394,16 @@ This project demonstrates practical experience with:
 * Cloud Native Tooling
 
 ---
-
+**Future Enhancements**
+- ECR Image Push
+- Automated Image Tag Updates
+- Argo Rollouts (Blue-Green Deployment)
+- Helm-Based Deployments
+- Multi-Environment GitOps
+- Flux CD Integration
+- Prometheus & Grafana Monitoring
+- Kyverno Policies
+---
 ## Author
 
 **Shrini**

@@ -1,121 +1,123 @@
-# GitLab DevSecOps Pipeline
+# GitLab DevSecOps Pipeline with GitOps Deployment on AWS EKS
 
-A complete end-to-end DevSecOps pipeline implementation using GitLab CI/CD integrated with modern security and cloud-native tools.
+A complete end-to-end DevSecOps implementation using GitLab CI/CD integrated with security scanning tools, Kubernetes, Argo CD, and AWS EKS.
 
-This project demonstrates how to build secure CI/CD pipelines with:
+---
+
+## Project Overview
+
+This project demonstrates a practical DevSecOps workflow where application code, infrastructure, and Kubernetes deployment manifests are continuously validated for security and compliance before deployment.
+
+The solution incorporates:
 
 * GitLab CI/CD
 * Docker
 * Kubernetes
+* Amazon EKS
+* SonarQube
+* Gitleaks
 * Trivy
 * Checkov
-* SonarQube
 * Argo CD
 * Terraform
-* AWS EKS
-* OWASP ZAP
+* GitOps Deployment Model
 
 ---
 
-# Project Overview
-
-This repository showcases a practical DevSecOps workflow where application code, infrastructure, and container images are continuously validated for security and compliance before deployment.
-
-The pipeline includes:
-
-* Source Code Analysis (SAST)
-* Infrastructure as Code (IaC) Scanning
-* Container Vulnerability Scanning
-* Docker Image Build
-* Kubernetes Deployment
-* GitOps Deployment with Argo CD
-* Dynamic Application Security Testing (DAST)
-
----
-
-# Architecture
+## Architecture
 
 ```text
 Developer Commit
         │
         ▼
-GitLab Repository
+   GitLab Repository
         │
         ▼
-GitLab CI/CD Pipeline
+ GitLab CI/CD Pipeline
         │
- ┌──────┼───────────────────────────────┐
- │      │               │               │
- ▼      ▼               ▼               ▼
-SonarQube  Checkov   Trivy        Docker Build
-  SAST      IaC       Scan             │
-                                       ▼
-                              Container Registry
-                                       │
-                                       ▼
-                                  Argo CD
-                                       │
-                                       ▼
-                                   AWS EKS
-                                       │
-                                       ▼
-                                 OWASP ZAP
-                                   DAST Scan
+ ┌──────┼─────────────────────────────┐
+ │      │             │               │
+ ▼      ▼             ▼               ▼
+Gitleaks SonarQube  Checkov       Docker Build
+Secrets   SAST      IaC Scan
+ Scan
+        │
+        ▼
+ Kubernetes Manifests
+        │
+        ▼
+      Argo CD
+        │
+        ▼
+      AWS EKS
 ```
 
 ---
 
-# Tools Used
+## Tools Used
 
-| Tool         | Purpose                                       |
-| ------------ | --------------------------------------------- |
-| GitLab CI/CD | Continuous Integration & Delivery             |
-| Docker       | Containerization                              |
-| Kubernetes   | Container Orchestration                       |
-| AWS EKS      | Managed Kubernetes Service                    |
-| Trivy        | Container & Dependency Vulnerability Scanning |
-| Checkov      | Infrastructure as Code Security Scanning      |
-| SonarQube    | Static Code Analysis                          |
-| Argo CD      | GitOps Continuous Delivery                    |
-| Terraform    | Infrastructure Provisioning                   |
-| OWASP ZAP    | Dynamic Application Security Testing          |
+| Tool         | Purpose                                    |
+| ------------ | ------------------------------------------ |
+| GitLab CI/CD | Continuous Integration & Delivery          |
+| Docker       | Containerization                           |
+| Kubernetes   | Container Orchestration                    |
+| AWS EKS      | Managed Kubernetes Service                 |
+| SonarQube    | Static Application Security Testing (SAST) |
+| Gitleaks     | Secret Detection                           |
+| Checkov      | Infrastructure as Code Security Scanning   |
+| Trivy        | Container Vulnerability Scanning           |
+| Argo CD      | GitOps Continuous Delivery                 |
+| Terraform    | Infrastructure Provisioning                |
 
 ---
 
-# Repository Structure
+## Repository Structure
 
 ```text
 .
-├── app/
-│   ├── app.js
-│   ├── package.json
-│   └── Dockerfile
+├── app.js
+├── Dockerfile
+├── main.tf
+├── sonar-project.properties
+├── .gitlab-ci.yml
+├── application.yaml
 │
-├── terraform/
-│   ├── main.tf
-│   ├── variables.tf
-│   └── outputs.tf
-│
-├── kubernetes/
+├── k8s-manifests
 │   ├── deployment.yaml
 │   ├── service.yaml
 │   └── ingress.yaml
 │
-├── argocd/
-│   └── application.yaml
-│
-├── sonar-project.properties
-├── .gitlab-ci.yml
+├── secrets.env
+├── aws-secret.txt
 └── README.md
 ```
 
 ---
 
-# DevSecOps Pipeline Stages
+## DevSecOps Pipeline Stages
 
-## 1. Source Code Analysis (SAST)
+### 1. Secret Scanning
 
-SonarQube is used for:
+Gitleaks scans the repository for:
+
+* Hardcoded passwords
+* AWS Access Keys
+* API Tokens
+* Credentials
+* Sensitive information
+
+Example:
+
+```yaml
+git_leaks:
+  stage: security
+```
+
+---
+
+### 2. Static Application Security Testing (SAST)
+
+SonarQube performs:
 
 * Code quality analysis
 * Security hotspot detection
@@ -125,56 +127,49 @@ SonarQube is used for:
 Example:
 
 ```yaml
-sonarqube-check:
-  stage: sast
-  script:
-    - sonar-scanner
+sonarqube_scan:
+  stage: security
 ```
 
 ---
 
-## 2. Infrastructure as Code Security
+### 3. Infrastructure as Code Security
 
 Checkov scans Terraform and Kubernetes manifests for:
 
 * Misconfigurations
+* Compliance violations
 * Public exposure risks
 * Insecure IAM policies
-* Compliance violations
 
 Example:
 
 ```yaml
-checkov-scan:
+checkov_scan:
   stage: security
-  script:
-    - checkov -d .
 ```
 
 ---
 
-## 3. Container Security Scanning
+### 4. Container Security Scanning
 
 Trivy scans:
 
-* Docker images
-* OS packages
-* Application dependencies
-* Kubernetes manifests
-* Secrets
+* Container images
+* Operating system packages
+* Dependencies
+* Vulnerabilities
 
 Example:
 
 ```yaml
 trivy-scan:
   stage: security
-  script:
-    - trivy fs .
 ```
 
 ---
 
-## 4. Docker Image Build
+### 5. Docker Image Build
 
 Application images are built using Docker.
 
@@ -183,140 +178,145 @@ Example:
 ```yaml
 docker-build:
   stage: build
-  script:
-    - docker build -t devsecops-demo .
 ```
 
 ---
 
-## 5. GitOps Deployment Using Argo CD
+## GitOps Deployment with Argo CD
 
-Argo CD continuously monitors Git repositories and synchronizes Kubernetes manifests automatically.
+This project demonstrates GitOps-based deployment using Argo CD.
 
-Features:
+Argo CD continuously monitors Kubernetes manifests stored in Git and automatically synchronizes the desired state to the Kubernetes cluster.
 
-* Declarative deployments
-* Automatic sync
-* Self-healing
-* Drift detection
+Workflow:
+
+```text
+Developer Updates Kubernetes Manifest
+                │
+                ▼
+         GitLab Repository
+                │
+                ▼
+      Argo CD Detects Change
+                │
+                ▼
+      Application OutOfSync
+                │
+                ▼
+           Auto Sync
+                │
+                ▼
+         AWS EKS Deployment
+```
+
+### Key GitOps Features
+
+* Declarative Deployments
+* Automatic Synchronization
+* Self-Healing
+* Drift Detection
+* Git as Single Source of Truth
+
+Example Argo CD Application:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-demo
+  namespace: argocd
+
+spec:
+  project: default
+
+  source:
+    repoURL: <gitlab-repository>
+    targetRevision: argocd-deployment
+    path: k8s-manifests
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
 
 ---
 
-## 6. Kubernetes Deployment
+## Kubernetes Deployment
 
-The application is deployed to AWS EKS.
+The application is deployed to Amazon EKS using Kubernetes manifests.
 
-Includes:
+Deployment Components:
 
-* Deployment manifests
-* Services
+* Deployment
+* Service
 * Ingress
-* ConfigMaps
-* Secrets
+* Namespace
+* Containerized Application
+
+Benefits:
+
+* High Availability
+* Scalability
+* Declarative Infrastructure
+* Cloud-Native Deployment Model
 
 ---
 
-## 7. Dynamic Application Security Testing (DAST)
+## Security Controls Implemented
 
-OWASP ZAP performs runtime application security testing.
-
-Detects:
-
-* XSS
-* SQL Injection
-* Missing security headers
-* Authentication weaknesses
-
-Example:
-
-```yaml
-zap-scan:
-  stage: dast
-  script:
-    - zap-baseline.py -t http://app-url
-```
+| Security Area               | Implementation |
+| --------------------------- | -------------- |
+| Secret Detection            | Gitleaks       |
+| SAST                        | SonarQube      |
+| IaC Security                | Checkov        |
+| Container Security          | Trivy          |
+| GitOps Deployment           | Argo CD        |
+| Kubernetes Deployment       | Amazon EKS     |
+| Infrastructure Provisioning | Terraform      |
 
 ---
 
-# GitLab Pipeline Example
+## AWS EKS Integration
 
-```yaml
-stages:
-  - build
-  - sast
-  - security
-  - deploy
-
-sonarqube-check:
-  stage: sast
-
-trivy-scan:
-  stage: security
-
-checkov-scan:
-  stage: security
-
-build-image:
-  stage: build
-
-deploy:
-  stage: deploy
-```
-
----
-
-# Security Controls Implemented
-
-| Security Area         | Implementation          |
-| --------------------- | ----------------------- |
-| SAST                  | SonarQube               |
-| DAST                  | OWASP ZAP               |
-| IaC Security          | Checkov                 |
-| Container Security    | Trivy                   |
-| GitOps                | Argo CD                 |
-| Kubernetes Security   | RBAC & Secure Manifests |
-| Supply Chain Security | Image Scanning          |
-
----
-
-# AWS EKS Integration
-
-This project integrates with AWS EKS for Kubernetes deployment.
+This project integrates with Amazon EKS for Kubernetes deployment.
 
 Features:
 
-* Managed Kubernetes cluster
-* IAM Roles for Service Accounts (IRSA)
-* Cluster Autoscaler
-* Secure networking
-* Load Balancer integration
+* Managed Kubernetes Control Plane
+* Secure Cluster Deployment
+* Load Balancer Integration
+* Auto Scaling Support
+* Cloud-Native Application Hosting
 
 ---
 
-# Key Features
+## Key Features
 
 * End-to-End DevSecOps Pipeline
 * Shift-Left Security
-* Infrastructure as Code
 * GitOps Deployment Model
+* Infrastructure as Code
 * Kubernetes Security Best Practices
-* Cloud-Native Architecture
-* Automated Security Gates
 * CI/CD Automation
+* Automated Security Gates
+* Cloud-Native Architecture
 
 ---
 
-# Setup Instructions
+## Setup Instructions
 
-## Clone Repository
+### Clone Repository
 
 ```bash
-git clone https://github.com/shrini-devsecops/gitlab-devsecops-pipeline.git
+git clone https://github.com/<your-github-username>/<repository-name>.git
 ```
 
----
-
-## Run Terraform
+### Run Terraform
 
 ```bash
 terraform init
@@ -324,88 +324,82 @@ terraform plan
 terraform apply
 ```
 
----
-
-## Configure Kubernetes
+### Verify Kubernetes Cluster
 
 ```bash
 kubectl get nodes
 ```
 
----
+### Configure Argo CD
 
-## Run GitLab Pipeline
+```bash
+kubectl apply -f application.yaml
+```
 
-Push code to GitLab repository.
+### Verify Application
 
-Pipeline automatically triggers:
-
-* SAST scans
-* IaC scans
-* Container scans
-* Docker builds
-* Kubernetes deployment
-
----
-
-# Sample Security Findings
-
-## Trivy
-
-* Vulnerable npm packages
-* OS package CVEs
-* Secrets detection
-
-## Checkov
-
-* Public Security Groups
-* Open ingress rules
-* Weak IAM policies
-
-## SonarQube
-
-* Code smells
-* Security hotspots
-* Maintainability issues
+```bash
+kubectl get applications -n argocd
+kubectl get pods
+```
 
 ---
 
-# Future Enhancements
+## Sample Security Findings
 
-* Helm Charts
-* Kubernetes Network Policies
-* Falco Runtime Security
-* Admission Controllers
-* Kyverno Policies
-* Multi-Environment GitOps
-* Prometheus Monitoring
-* Grafana Dashboards
-* GitLab Auto DevOps
+### Gitleaks
+
+* Hardcoded Secrets
+* API Tokens
+* AWS Credentials
+* Password Exposure
+
+### SonarQube
+
+* Code Smells
+* Security Hotspots
+* Maintainability Issues
+* Vulnerability Detection
+
+### Checkov
+
+* Terraform Misconfigurations
+* Security Group Violations
+* IAM Policy Issues
+* Kubernetes Security Checks
+
+### Trivy
+
+* Container Vulnerabilities
+* Dependency Risks
+* Critical CVEs
+* High Severity Findings
 
 ---
 
-# Learning Outcomes
+## Learning Outcomes
 
 This project demonstrates practical experience with:
 
 * DevSecOps
-* CI/CD Pipelines
+* GitLab CI/CD
 * Kubernetes
-* AWS Cloud
+* AWS EKS
 * GitOps
-* Container Security
+* Argo CD
 * Terraform
+* Container Security
+* Infrastructure Security
 * Security Automation
 * Cloud Native Tooling
 
 ---
 
-# Author
+## Author
 
-Shrini DevSecOps Engineer
+**Shrini**
 
-GitHub:
-[https://github.com/shrini-devsecops](https://github.com/shrini-devsecops)
+DevOps / DevSecOps Engineer
 
-LinkedIn:
-[https://linkedin.com/in/shrinivasa-a-l-devops](https://linkedin.com/in/shrinivasa-a-l-devops)
+GitHub: https://github.com/shrini-devsecops
+LinkedIn: https://linkedin.com/in/shrinivasa-a-l-devops

@@ -516,7 +516,6 @@ This project demonstrates practical experience with:
 * Automated Image Tag Updates
 * Helm-Based Deployments
 * Multi-Environment GitOps
-* Flux CD Integration
 * Prometheus & Grafana Monitoring
 * Kyverno Policies
 

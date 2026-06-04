@@ -8,7 +8,7 @@ spec:
   project: default
 
   source:
-    repoURL: http://18.205.184.214/root/test-project.git
+    repoURL: http://x.x.x.x/root/test-project.git
     targetRevision: argocd-deployment
     path: k8s-manifests 
 

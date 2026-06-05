@@ -1,7 +1,7 @@
-FROM node:14
+FROM nginx:1.28-alpine
 
-WORKDIR /app
+COPY index.html /usr/share/nginx/html/index.html
 
-COPY . .
+EXPOSE 80
 
-CMD ["node", "app.js"]
+CMD ["nginx", "-g", "daemon off;"]

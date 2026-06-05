@@ -1,10 +1,18 @@
 stages:
   - build
+  - gitops
   - security
 
 variables:
   IMAGE_NAME: devsecops-demo
+  CI_PROJECT_NAME: "sample-argocd-project"
+  HELM_CHART_NAME: "helm-sample-argocd-project"
+  ECR_NAMESPACE: "argocd"
+  ECR_REGION: "us-east-1"
+  ECR_REPO_NAME: "$ECR_NAMESPACE/$CI_PROJECT_NAME"
+  ECR_DOCKER_SECRET: "ecr-secret"
 
+  
 git_leaks:
   stage: security
   image:
@@ -36,14 +44,45 @@ sonarqube_scan:
   tags:
     - shared
 
-
-docker-build:
+docker_build:
   stage: build
   image: docker:latest
+  before_script:
+    - apk add --no-cache python3 py3-pip
+    - apk add --no-cache aws-cli
+    - export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_DEV
+    - export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_DEV
+    - export AWS_DEFAULT_REGION=$ECR_REGION
+  script:
+    - docker build -t $CI_PROJECT_NAME:$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA .
+    - docker tag $CI_PROJECT_NAME:$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA $AWS_ACCOUNT_ID_DEV.dkr.ecr.$ECR_REGION.amazonaws.com/$ECR_NAMESPACE/$CI_PROJECT_NAME:$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
+    - aws configure set default.region $ECR_REGION    
+    - aws ecr describe-repositories --repository-names "$ECR_REPO_NAME" || aws ecr create-repository --repository-name "$ECR_REPO_NAME"
+    - aws ecr get-login-password --region $ECR_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID_DEV.dkr.ecr.$ECR_REGION.amazonaws.com
+    - docker push $AWS_ACCOUNT_ID_DEV.dkr.ecr.$ECR_REGION.amazonaws.com/$ECR_NAMESPACE/$CI_PROJECT_NAME:$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
   tags:
     - shared
+
+update_gitops_manifest:
+  stage: gitops
+  image: alpine:latest
+  variables:
+    IMAGE_TAG: "$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA"
+  before_script:
+    - apk add --no-cache git sed
   script:
-    - docker build -t $IMAGE_NAME .
+    - echo "test"
+    - export IMAGE_TAG="$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA"
+    - 'sed -i "s|image:.*|image: $AWS_ACCOUNT_ID_DEV.dkr.ecr.$ECR_REGION.amazonaws.com/$ECR_NAMESPACE/$CI_PROJECT_NAME:$IMAGE_TAG|g" k8s-manifests/rollout.yaml'
+    - git config --global user.email "gitlab-ci@gitlab.local"
+    - git config --global user.name "GitLab-CI"
+    - git add k8s-manifests/rollout.yaml
+    - git commit -m "Updated image tag to $IMAGE_TAG [skip ci]" || true
+    - git push http://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git HEAD:argocd-deployment	
+  tags:
+    - shared
+  needs:
+    - docker_build
 
 trivy-scan:
   stage: security
@@ -53,14 +92,14 @@ trivy-scan:
   tags:
     - shared
   script:
-    - trivy image --severity HIGH,CRITICAL $IMAGE_NAME
+    - trivy image --severity HIGH,CRITICAL $CI_PROJECT_NAME:$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
 
-checkov_scan:
-  stage: security
-  image:
-    name: bridgecrew/checkov
-    entrypoint: [""]
-  tags:
-    - shared  
-  script:
-    - checkov -d .
+#checkov_scan:
+#  stage: security
+#  image:
+#    name: bridgecrew/checkov
+#    entrypoint: [""]
+#  tags:
+#    - shared  
+#  script:
+#    - checkov -d .

@@ -17,9 +17,11 @@ spec:
         app: nginx-demo
 
     spec:
+      imagePullSecrets:
+      - name: ecr-secret 
       containers:
       - name: nginx
-        image: nginx:1.28
+        image: 533267202595.dkr.ecr.us-east-1.amazonaws.com/argocd/sample-argocd-project:argocd-deployment-17ebaddd
 
         ports:
         - containerPort: 80

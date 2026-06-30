@@ -1,82 +1,96 @@
-# GitLab DevSecOps Pipeline with GitOps & Blue-Green Deployment on AWS EKS
+# GitLab DevSecOps Pipeline with GitOps, Blue-Green Deployment & Cosign Image Signing on AWS EKS
 
-A complete end-to-end DevSecOps implementation using GitLab CI/CD integrated with security scanning tools, Kubernetes, Argo CD, Argo Rollouts, and AWS EKS.
+## Overview
+
+This project demonstrates a complete **end-to-end DevSecOps implementation** using **GitLab CI/CD**, **Amazon EKS**, **GitOps**, **Argo CD**, **Argo Rollouts**, and **Cosign** to securely build, scan, sign, verify, and deploy containerized applications.
+
+The pipeline follows **Shift-Left Security** principles by integrating multiple security gates before deployment, ensuring that only scanned and cryptographically signed container images are promoted to Kubernetes.
 
 ---
 
-# Project Overview
+# Features
 
-This project demonstrates a practical DevSecOps workflow where application code, infrastructure, and Kubernetes deployment manifests are continuously validated for security and compliance before deployment.
-
-The solution incorporates:
-
-* GitLab CI/CD
-* Docker
-* Kubernetes
-* Amazon EKS
-* SonarQube
-* Gitleaks
-* Trivy
-* Checkov
-* Argo CD
-* Argo Rollouts
-* Terraform
-* GitOps Deployment Model
-* Blue-Green Deployment Strategy
+* GitLab CI/CD Pipeline
+* Docker Image Build
+* Amazon ECR Integration
+* Kubernetes Deployment on Amazon EKS
+* GitOps using Argo CD
+* Blue-Green Deployment using Argo Rollouts
+* Secret Detection with Gitleaks
+* Static Application Security Testing (SAST) using SonarQube
+* Infrastructure as Code (IaC) Security using Checkov
+* Container Vulnerability Scanning using Trivy
+* Container Image Signing using Cosign
+* Container Image Signature Verification
+* Infrastructure Provisioning using Terraform
 
 ---
 
 # Architecture
 
 ```text
-Developer Commit
-        │
-        ▼
-   GitLab Repository
-        │
-        ▼
- GitLab CI/CD Pipeline
-        │
- ┌──────┼─────────────────────────────┐
- │      │             │               │
- ▼      ▼             ▼               ▼
-Gitleaks SonarQube  Checkov       Docker Build
-Secrets   SAST      IaC Scan
- Scan
-        │
-        ▼
- Kubernetes Manifests
-        │
-        ▼
-      Argo CD
-        │
-        ▼
-   Argo Rollouts
-        │
-        ▼
- Blue-Green Deployment
-        │
-        ▼
-      AWS EKS
+                    Developer Commit
+                           │
+                           ▼
+                  GitLab Repository
+                           │
+                           ▼
+                 GitLab CI/CD Pipeline
+                           │
+     ┌──────────────┬──────────────┬──────────────┐
+     │              │              │              │
+     ▼              ▼              ▼              ▼
+ Gitleaks      SonarQube       Checkov      Docker Build
+ Secrets          SAST          IaC Scan
+   Scan
+                           │
+                           ▼
+                 Push Image to Amazon ECR
+                           │
+                           ▼
+                  Trivy Image Scan
+                           │
+                           ▼
+                  Cosign Image Signing
+                           │
+                           ▼
+             Cosign Signature Verification
+                           │
+                           ▼
+             Update GitOps Deployment Manifest
+                           │
+                           ▼
+                       Argo CD
+                           │
+                           ▼
+                   Argo Rollouts
+                           │
+                           ▼
+               Blue-Green Deployment
+                           │
+                           ▼
+                     Amazon EKS
 ```
 
 ---
 
-# Tools Used
+# Technology Stack
 
-| Tool          | Purpose                                       |
-| ------------- | --------------------------------------------- |
-| GitLab CI/CD  | Continuous Integration & Delivery             |
-| Docker        | Containerization                              |
-| Kubernetes    | Container Orchestration                       |
-| AWS EKS       | Managed Kubernetes Service                    |
-| SonarQube     | Static Application Security Testing (SAST)    |
-| Gitleaks      | Secret Detection                              |
-| Checkov       | Infrastructure as Code Security Scanning      |
-| Trivy         | Container Vulnerability Scanning              |
-| Argo CD       | GitOps Continuous Delivery                    |
-| Argo Rollouts | Progressive Delivery & Blue-Green Deployments |
-| Terraform     | Infrastructure Provisioning                   |
+| Technology    | Purpose                                      |
+| ------------- | -------------------------------------------- |
+| GitLab CI/CD  | Continuous Integration & Continuous Delivery |
+| Docker        | Containerization                             |
+| Amazon ECR    | Container Registry                           |
+| Kubernetes    | Container Orchestration                      |
+| Amazon EKS    | Managed Kubernetes                           |
+| Terraform     | Infrastructure Provisioning                  |
+| SonarQube     | Static Application Security Testing (SAST)   |
+| Gitleaks      | Secret Detection                             |
+| Checkov       | Infrastructure as Code Security              |
+| Trivy         | Container Vulnerability Scanning             |
+| Cosign        | Container Image Signing & Verification       |
+| Argo CD       | GitOps Continuous Delivery                   |
+| Argo Rollouts | Blue-Green Deployment                        |
 
 ---
 
@@ -106,17 +120,37 @@ Secrets   SAST      IaC Scan
 
 ---
 
-# DevSecOps Pipeline Stages
+# DevSecOps Pipeline
 
-## 1. Secret Scanning
+## Stage 1 – Docker Build
 
-Gitleaks scans the repository for:
+* Builds Docker image
+* Tags image using Git commit SHA
+* Pushes image to Amazon ECR
 
-* Hardcoded passwords
+Example:
+
+```yaml
+docker_build:
+  stage: build
+```
+
+---
+
+## Stage 2 – Secret Detection
+
+Tool:
+
+**Gitleaks**
+
+Scans the repository for:
+
+* Hardcoded Passwords
 * AWS Access Keys
 * API Tokens
-* Credentials
-* Sensitive information
+* Secrets
+* Certificates
+* Private Keys
 
 Example:
 
@@ -127,14 +161,19 @@ git_leaks:
 
 ---
 
-## 2. Static Application Security Testing (SAST)
+## Stage 3 – Static Application Security Testing (SAST)
 
-SonarQube performs:
+Tool:
 
-* Code quality analysis
-* Security hotspot detection
-* Vulnerability identification
-* Technical debt analysis
+**SonarQube**
+
+Performs:
+
+* Code Quality Analysis
+* Security Hotspots
+* Vulnerability Detection
+* Code Smells
+* Technical Debt Analysis
 
 Example:
 
@@ -145,14 +184,24 @@ sonarqube_scan:
 
 ---
 
-## 3. Infrastructure as Code Security
+## Stage 4 – Infrastructure as Code Security
 
-Checkov scans Terraform and Kubernetes manifests for:
+Tool:
 
-* Misconfigurations
-* Compliance violations
-* Public exposure risks
-* Insecure IAM policies
+**Checkov**
+
+Scans:
+
+* Terraform
+* Kubernetes Manifests
+
+Detects:
+
+* Security Misconfigurations
+* IAM Issues
+* Public Exposure
+* Compliance Violations
+* Encryption Issues
 
 Example:
 
@@ -163,14 +212,18 @@ checkov_scan:
 
 ---
 
-## 4. Container Security Scanning
+## Stage 5 – Container Security
 
-Trivy scans:
+Tool:
 
-* Container images
-* Operating system packages
-* Dependencies
-* Vulnerabilities
+**Trivy**
+
+Scans Docker images for:
+
+* Critical CVEs
+* High Severity Vulnerabilities
+* OS Package Issues
+* Dependency Vulnerabilities
 
 Example:
 
@@ -181,269 +234,92 @@ trivy-scan:
 
 ---
 
-## 5. Docker Image Build
+# Software Supply Chain Security
 
-Application images are built using Docker.
+This project implements **container image signing** using **Cosign**.
 
-Example:
+Every container image pushed to Amazon ECR is digitally signed before deployment.
 
-```yaml
-docker-build:
-  stage: build
+The pipeline then verifies the signature before updating the GitOps deployment manifests.
+
+This ensures that only trusted and verified container images are deployed.
+
+Pipeline Flow
+
+```text
+Docker Build
+      │
+      ▼
+Push to Amazon ECR
+      │
+      ▼
+Cosign Sign
+      │
+      ▼
+Cosign Verify
+      │
+      ▼
+Update GitOps Manifest
 ```
+
+Benefits
+
+* Image Integrity
+* Image Authenticity
+* Supply Chain Security
+* Tamper Detection
+* Trusted Deployments
 
 ---
 
-# GitOps Deployment with Argo CD
+# GitOps Deployment
 
-This project demonstrates GitOps-based deployment using Argo CD.
+Argo CD continuously watches the Kubernetes manifests stored in Git.
 
-Argo CD continuously monitors Kubernetes manifests stored in Git and automatically synchronizes the desired state to the Kubernetes cluster.
+Whenever the deployment manifest changes, Argo CD automatically synchronizes the cluster with the desired state.
 
-## Workflow
+Workflow
 
 ```text
-Developer Updates Kubernetes Manifest
-                │
-                ▼
-         GitLab Repository
-                │
-                ▼
-      Argo CD Detects Change
-                │
-                ▼
-      Application OutOfSync
-                │
-                ▼
-           Auto Sync
-                │
-                ▼
-         AWS EKS Deployment
+Developer Updates Manifest
+           │
+           ▼
+      Git Repository
+           │
+           ▼
+        Argo CD
+           │
+           ▼
+      Auto Synchronization
+           │
+           ▼
+      Amazon EKS Cluster
 ```
 
-## Key GitOps Features
+Key Features
 
 * Declarative Deployments
-* Automatic Synchronization
-* Self-Healing
-* Drift Detection
 * Git as Single Source of Truth
-
-## Example Argo CD Application
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: nginx-demo
-  namespace: argocd
-
-spec:
-  project: default
-
-  source:
-    repoURL: <gitlab-repository>
-    targetRevision: argocd-deployment
-    path: k8s-manifests
-
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: default
-
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-```
+* Drift Detection
+* Self-Healing
+* Automatic Synchronization
 
 ---
 
-# Progressive Delivery using Argo Rollouts
+# Progressive Delivery
 
-This project implements Blue-Green deployment using Argo Rollouts integrated with Argo CD on Amazon EKS.
+The application is deployed using **Blue-Green Deployment** with Argo Rollouts.
 
-## Deployment Workflow
-
-```text
-Developer Updates Image Version
-              │
-              ▼
-      GitLab Repository
-              │
-              ▼
-         Argo CD Sync
-              │
-              ▼
- Argo Rollouts Creates
-   Preview Environment
-              │
-              ▼
-      Validation Testing
-              │
-              ▼
-      Manual Promotion
-              │
-              ▼
-      Traffic Switch
-              │
-              ▼
-      Production Release
-```
-
-## Blue-Green Deployment Features
-
-* Zero Downtime Deployments
-* Preview Environment Validation
-* Manual Promotion Approval
-* Instant Rollback Capability
-* Traffic Switching
-* Kubernetes Native Progressive Delivery
-
-## Example Rollout Configuration
-
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Rollout
-
-metadata:
-  name: nginx-demo
-
-spec:
-  strategy:
-    blueGreen:
-      activeService: nginx-active
-      previewService: nginx-preview
-      autoPromotionEnabled: false
-```
-
----
-
-# Kubernetes Deployment
-
-The application is deployed to Amazon EKS using Kubernetes manifests.
-
-Deployment Components:
-
-* Deployment
-* Rollout
-* Service
-* Ingress
-* Namespace
-* Containerized Application
-
-Benefits:
-
-* High Availability
-* Scalability
-* Declarative Infrastructure
-* Cloud-Native Deployment Model
-
----
-
-# Security Controls Implemented
-
-| Security Area               | Implementation |
-| --------------------------- | -------------- |
-| Secret Detection            | Gitleaks       |
-| SAST                        | SonarQube      |
-| IaC Security                | Checkov        |
-| Container Security          | Trivy          |
-| GitOps Deployment           | Argo CD        |
-| Progressive Delivery        | Argo Rollouts  |
-| Kubernetes Deployment       | Amazon EKS     |
-| Infrastructure Provisioning | Terraform      |
-
----
-
-# AWS EKS Integration
-
-This project integrates with Amazon EKS for Kubernetes deployment.
-
-Features:
-
-* Managed Kubernetes Control Plane
-* Secure Cluster Deployment
-* Load Balancer Integration
-* Auto Scaling Support
-* Cloud-Native Application Hosting
-
----
-
-# Key Features
-
-* End-to-End DevSecOps Pipeline
-* Shift-Left Security
-* GitOps Deployment Model
-* Blue-Green Deployment Strategy
-* Progressive Delivery
-* Infrastructure as Code
-* Kubernetes Security Best Practices
-* CI/CD Automation
-* Automated Security Gates
-* Cloud-Native Architecture
-
----
-
-# Setup Instructions
-
-## Clone Repository
-
-```bash
-git clone https://github.com/<your-github-username>/<repository-name>.git
-```
-
-## Run Terraform
-
-```bash
-terraform init
-terraform plan
-terraform apply
-```
-
-## Verify Kubernetes Cluster
-
-```bash
-kubectl get nodes
-```
-
-## Configure Argo CD
-
-```bash
-kubectl apply -f application.yaml
-```
-
-## Verify Application
-
-```bash
-kubectl get applications -n argocd
-kubectl get pods
-```
-
----
-
-# Blue-Green Deployment Demonstration
-
-Successfully implemented and validated Blue-Green deployment using Argo Rollouts and Argo CD.
-
-## Commands Used
-
-```bash
-kubectl argo rollouts get rollout nginx-demo -n default
-
-kubectl argo rollouts promote nginx-demo -n default
-
-kubectl argo rollouts undo nginx-demo -n default
-
-kubectl argo rollouts dashboard
-```
-
-## Deployment Lifecycle
+Deployment Flow
 
 ```text
 Version 1 (Blue)
        │
        ▼
-Version 2 (Green Preview)
+Version 2 (Green)
+       │
+       ▼
+Preview Validation
        │
        ▼
 Manual Promotion
@@ -452,7 +328,130 @@ Manual Promotion
 Traffic Switch
        │
        ▼
-Version 2 Production
+Production
+```
+
+Benefits
+
+* Zero Downtime
+* Preview Environment
+* Manual Approval
+* Instant Rollback
+* Progressive Delivery
+
+---
+
+# Security Gates
+
+| Security Gate        | Tool      | Purpose                                     |
+| -------------------- | --------- | ------------------------------------------- |
+| Secret Detection     | Gitleaks  | Detect hardcoded secrets                    |
+| Static Code Analysis | SonarQube | Detect code vulnerabilities                 |
+| IaC Security         | Checkov   | Scan Terraform & Kubernetes manifests       |
+| Container Security   | Trivy     | Scan container images                       |
+| Image Signing        | Cosign    | Digitally sign container images             |
+| Image Verification   | Cosign    | Verify image authenticity before deployment |
+
+---
+
+# Kubernetes Deployment
+
+Deployment Components
+
+* Deployment
+* Rollout
+* Service
+* Active Service
+* Preview Service
+* Ingress
+* Namespace
+
+Features
+
+* High Availability
+* Scalability
+* Cloud Native
+* GitOps Deployment
+* Progressive Delivery
+
+---
+
+# AWS Integration
+
+This project integrates with AWS services including:
+
+* Amazon EKS
+* Amazon ECR
+* AWS IAM
+* Elastic Load Balancer
+* Auto Scaling
+
+---
+
+# Setup
+
+## Clone Repository
+
+```bash
+git clone https://github.com/<your-github-username>/<repository-name>.git
+```
+
+---
+
+## Provision Infrastructure
+
+```bash
+terraform init
+
+terraform plan
+
+terraform apply
+```
+
+---
+
+## Verify EKS Cluster
+
+```bash
+kubectl get nodes
+```
+
+---
+
+## Deploy Argo CD Application
+
+```bash
+kubectl apply -f application.yaml
+```
+
+---
+
+## Verify Argo CD
+
+```bash
+kubectl get applications -n argocd
+```
+
+---
+
+## Verify Pods
+
+```bash
+kubectl get pods -A
+```
+
+---
+
+# Argo Rollouts Commands
+
+```bash
+kubectl argo rollouts get rollout nginx-demo -n default
+
+kubectl argo rollouts dashboard
+
+kubectl argo rollouts promote nginx-demo -n default
+
+kubectl argo rollouts undo nginx-demo -n default
 ```
 
 ---
@@ -461,63 +460,87 @@ Version 2 Production
 
 ## Gitleaks
 
-* Hardcoded Secrets
-* API Tokens
 * AWS Credentials
-* Password Exposure
+* API Tokens
+* Passwords
+* SSH Keys
+
+---
 
 ## SonarQube
 
-* Code Smells
 * Security Hotspots
-* Maintainability Issues
-* Vulnerability Detection
+* Code Smells
+* Bugs
+* Vulnerabilities
+
+---
 
 ## Checkov
 
-* Terraform Misconfigurations
-* Security Group Violations
-* IAM Policy Issues
-* Kubernetes Security Checks
+* Public Security Groups
+* IAM Misconfigurations
+* Missing Encryption
+* Kubernetes Security Issues
+
+---
 
 ## Trivy
 
-* Container Vulnerabilities
-* Dependency Risks
 * Critical CVEs
-* High Severity Findings
+* High Severity Vulnerabilities
+* Outdated Packages
+* Dependency Risks
+
+---
+
+## Cosign
+
+* Image Signature Verification
+* Trusted Image Validation
+* Tamper Detection
 
 ---
 
 # Learning Outcomes
 
-This project demonstrates practical experience with:
+This project demonstrates hands-on experience with:
 
 * DevSecOps
 * GitLab CI/CD
-* Kubernetes
-* AWS EKS
 * GitOps
+* Docker
+* Kubernetes
+* Amazon EKS
+* Amazon ECR
+* Terraform
+* SonarQube
+* Gitleaks
+* Checkov
+* Trivy
+* Cosign
 * Argo CD
 * Argo Rollouts
-* Blue-Green Deployments
-* Progressive Delivery
-* Terraform
-* Container Security
-* Infrastructure Security
-* Security Automation
-* Cloud Native Tooling
+* Blue-Green Deployment
+* Software Supply Chain Security
+* Shift-Left Security
+* Infrastructure as Code
+* Cloud Native Deployments
 
 ---
 
 # Future Enhancements
 
-* ECR Image Push
-* Automated Image Tag Updates
-* Helm-Based Deployments
+* Helm-based Deployments
 * Multi-Environment GitOps
+* Multi-Cluster Deployments
+* SBOM Generation
+* SLSA Provenance
+* Kyverno Image Signature Validation
+* OPA Gatekeeper Policies
+* Falco Runtime Security
 * Prometheus & Grafana Monitoring
-* Kyverno Policies
+* OpenTelemetry Observability
 
 ---
 
@@ -525,8 +548,10 @@ This project demonstrates practical experience with:
 
 **Shrini**
 
-DevOps / DevSecOps Engineer
+**DevOps | DevSecOps | Cloud Platform Engineer**
 
-GitHub: https://github.com/shrini-devsecops
+GitHub:
+https://github.com/shrini-devsecops
 
-LinkedIn: https://linkedin.com/in/shrinivasa-a-l-devops
+LinkedIn:
+https://linkedin.com/in/shrinivasa-a-l-devops

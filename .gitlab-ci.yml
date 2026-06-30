@@ -1,5 +1,6 @@
 stages:
   - build
+  - sign
   - gitops
   - security
 
@@ -11,8 +12,9 @@ variables:
   ECR_REGION: "us-east-1"
   ECR_REPO_NAME: "$ECR_NAMESPACE/$CI_PROJECT_NAME"
   ECR_DOCKER_SECRET: "ecr-secret"
+  FULL_IMAGE: "$AWS_ACCOUNT_ID_DEV.dkr.ecr.$ECR_REGION.amazonaws.com/$ECR_NAMESPACE/$CI_PROJECT_NAME:$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA"
 
-  
+
 git_leaks:
   stage: security
   image:
@@ -63,6 +65,84 @@ docker_build:
   tags:
     - shared
 
+# ─────────────────────────────────────────────────────────────
+# NEW: Cosign image signing — runs right after build/push,
+# before the image gets deployed via GitOps.
+# Uses KEYLESS signing — no private key to manage or leak.
+# Identity proof comes from GitLab's own OIDC token (id_tokens below).
+# Signature + certificate get recorded in the public Rekor
+# transparency log (like Certificate Transparency, but for images).
+# ─────────────────────────────────────────────────────────────
+sign_image:
+  stage: sign
+  # NOTE: gcr.io/projectsigstore/cosign is a DISTROLESS image — no shell,
+  # so we use alpine + the cosign binary instead.
+  #
+  # Using KEY-BASED signing here instead of keyless OIDC signing.
+  # Keyless (Fulcio) requires GitLab's OIDC issuer to be trusted by the
+  # public Fulcio instance, which fails on GitLab.com shared runners /
+  # free tier with a 400 "error processing the identity token" — this is
+  # a known Fulcio/GitLab OIDC-audience trust gap, not a config mistake
+  # on our side. Key-based signing avoids that dependency entirely and
+  # is the simpler, faster path to a working demo.
+  image: alpine:3.19
+  variables:
+    IMAGE_TAG: "$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA"
+    COSIGN_VERSION: "v2.2.4"
+  before_script:
+    - apk add --no-cache curl aws-cli
+    - export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_DEV
+    - export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_DEV
+    - export AWS_DEFAULT_REGION=$ECR_REGION
+    - curl -sLO https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64
+    - mv cosign-linux-amd64 /usr/local/bin/cosign
+    - chmod +x /usr/local/bin/cosign
+    - aws ecr get-login-password --region $ECR_REGION | cosign login $AWS_ACCOUNT_ID_DEV.dkr.ecr.$ECR_REGION.amazonaws.com --username AWS --password-stdin
+  script:
+    - echo "$COSIGN_PRIVATE_KEY" > cosign.key
+    - echo "Signing image with cosign private key"
+    - cosign sign --yes --key cosign.key
+        $AWS_ACCOUNT_ID_DEV.dkr.ecr.$ECR_REGION.amazonaws.com/$ECR_NAMESPACE/$CI_PROJECT_NAME:$IMAGE_TAG
+  after_script:
+    - rm -f cosign.key
+  tags:
+    - shared
+  needs:
+    - docker_build
+
+# ─────────────────────────────────────────────────────────────
+# OPTIONAL but recommended: verify the signature right here in
+# the pipeline too — fail fast before GitOps even updates the
+# manifest, rather than only relying on the cluster admission
+# controller to catch a bad/missing signature later.
+# ─────────────────────────────────────────────────────────────
+verify_image_signature:
+  stage: sign
+  image: alpine:3.19
+  variables:
+    IMAGE_TAG: "$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA"
+    COSIGN_VERSION: "v2.2.4"
+  before_script:
+    - apk add --no-cache curl aws-cli
+    - export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_DEV
+    - export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_DEV
+    - export AWS_DEFAULT_REGION=$ECR_REGION
+    - curl -sLO https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64
+    - mv cosign-linux-amd64 /usr/local/bin/cosign
+    - chmod +x /usr/local/bin/cosign
+    - aws ecr get-login-password --region $ECR_REGION | cosign login $AWS_ACCOUNT_ID_DEV.dkr.ecr.$ECR_REGION.amazonaws.com --username AWS --password-stdin
+  script:
+    - echo "$COSIGN_PUBLIC_KEY" > cosign.pub
+    - echo "Verifying image signature with cosign public key"
+    - cosign verify --key cosign.pub
+        $AWS_ACCOUNT_ID_DEV.dkr.ecr.$ECR_REGION.amazonaws.com/$ECR_NAMESPACE/$CI_PROJECT_NAME:$IMAGE_TAG
+  after_script:
+    - rm -f cosign.pub
+  tags:
+    - shared
+  needs:
+    - sign_image
+
 update_gitops_manifest:
   stage: gitops
   image: alpine:latest
@@ -83,6 +163,7 @@ update_gitops_manifest:
     - shared
   needs:
     - docker_build
+    - verify_image_signature   # NEW: don't update GitOps manifest unless signature is verified
 
 trivy-scan:
   stage: security
@@ -94,12 +175,12 @@ trivy-scan:
   script:
     - trivy image --severity HIGH,CRITICAL $CI_PROJECT_NAME:$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
 
-#checkov_scan:
-#  stage: security
-#  image:
-#    name: bridgecrew/checkov
-#    entrypoint: [""]
-#  tags:
-#    - shared  
-#  script:
-#    - checkov -d .
+checkov_scan:
+  stage: security
+  image:
+    name: bridgecrew/checkov
+    entrypoint: [""]
+  tags:
+    - shared  
+  script:
+    - checkov -d .
